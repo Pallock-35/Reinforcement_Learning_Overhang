@@ -1,0 +1,1993 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>PrusaSAM Dashboard</title>
+  <style>
+    :root {
+      --bg: #081018;
+      --bg-elevated: rgba(11, 18, 28, 0.84);
+      --panel: rgba(13, 21, 34, 0.92);
+      --panel-border: rgba(148, 163, 184, 0.18);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --line: rgba(148, 163, 184, 0.16);
+      --accent: #f59e0b;
+      --accent-2: #22c55e;
+      --danger: #f87171;
+      --shadow: 0 24px 60px rgba(2, 6, 23, 0.45);
+      --radius: 22px;
+      --radius-sm: 16px;
+      --font: "Aptos", "Segoe UI Variable", "Segoe UI", "Trebuchet MS", sans-serif;
+      --mono: "Cascadia Mono", "Consolas", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+      background:
+        radial-gradient(circle at top left, rgba(245, 158, 11, 0.18), transparent 35%),
+        radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.14), transparent 36%),
+        linear-gradient(180deg, #06111a 0%, #09131d 48%, #061018 100%);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.35;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.75), transparent 92%);
+    }
+
+    .shell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      max-width: none;
+      margin: 0;
+      padding: 16px;
+      gap: 14px;
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      flex-shrink: 0;
+    }
+
+    .topbar-title {
+      margin: 0;
+      font-size: 1.25rem;
+      letter-spacing: -0.03em;
+      white-space: nowrap;
+    }
+
+    .topbar-state {
+      color: var(--muted);
+      font-size: 14px;
+      flex: 1 1 200px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .quadrant-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: minmax(140px, 30fr) minmax(240px, 70fr);
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .quadrant {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      min-width: 0;
+    }
+
+    .quadrant-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      gap: 12px;
+    }
+
+    .quadrant-tl .quadrant-body,
+    .quadrant-tr .quadrant-body {
+      gap: 4px;
+    }
+
+    .quadrant-tl.panel,
+    .quadrant-tr.panel {
+      padding: 10px 12px 12px;
+    }
+
+    .quadrant-bl.panel,
+    .quadrant-br.panel {
+      padding: 8px 10px 10px;
+    }
+
+    .quadrant-tl h2,
+    .quadrant-tr h2 {
+      margin-bottom: 4px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+    }
+
+    .quadrant-tl .metrics,
+    .quadrant-tr .metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 6px;
+      flex-shrink: 0;
+    }
+
+    .quadrant-tl .metric,
+    .quadrant-tr .metric {
+      flex: 1 1 0;
+      display: flex;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 4px 6px;
+      padding: 2px 6px;
+      min-width: 0;
+    }
+
+    .quadrant-tl .metric .label,
+    .quadrant-tr .metric .label {
+      font-size: 8px;
+      letter-spacing: 0.05em;
+      margin-bottom: 0;
+    }
+
+    .quadrant-tl .metric .value,
+    .quadrant-tr .metric .value {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .quadrant-tl .metric .subvalue,
+    .quadrant-tr .metric .subvalue {
+      margin-top: 0;
+      font-size: 8px;
+      line-height: 1.1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chart-quadrant-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 0;
+    }
+
+    .quadrant-tl .chart-legend,
+    .quadrant-tr .chart-legend {
+      gap: 6px 10px;
+      font-size: 10px;
+      line-height: 1.2;
+    }
+
+    .quadrant-tl .legend,
+    .quadrant-tr .legend {
+      gap: 4px;
+    }
+
+    .quadrant-tl .swatch,
+    .quadrant-tr .swatch {
+      width: 7px;
+      height: 7px;
+      box-shadow: none;
+      flex-shrink: 0;
+    }
+
+    .quadrant .chart {
+      flex: 1;
+      min-height: 120px;
+      height: auto;
+    }
+
+    .quadrant-bl .quadrant-body,
+    .quadrant-br .quadrant-body {
+      gap: 4px;
+      min-height: 0;
+    }
+
+    .quadrant-bl h2,
+    .quadrant-br h2 {
+      margin-bottom: 0;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+    }
+
+    .quadrant-br .thermal-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 10px;
+      margin-bottom: 0;
+      flex-shrink: 0;
+    }
+
+    .quadrant-br .thermal-summary {
+      font-size: 9px;
+      line-height: 1.2;
+      flex: 1 1 120px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .quadrant-bl .thermal-legend,
+    .quadrant-br .thermal-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 10px;
+      margin-bottom: 0;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+
+    .camera-frame {
+      flex: 1;
+      min-height: 0;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(2, 6, 23, 0.4);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px;
+      position: relative;
+    }
+
+    .camera-frame img {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+    }
+
+    .camera-frame .thermal-canvas {
+      display: block;
+      image-rendering: pixelated;
+      width: auto;
+      height: 100%;
+      max-width: 100%;
+      max-height: 100%;
+    }
+
+    .quadrant-br .camera-frame {
+      padding: 0;
+    }
+
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+    }
+
+    .hero-main {
+      padding: 26px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-main::after {
+      content: "";
+      position: absolute;
+      inset: auto -20% -40% auto;
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.18), transparent 68%);
+      filter: blur(10px);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border: 1px solid rgba(245, 158, 11, 0.24);
+      border-radius: 999px;
+      color: #fdba74;
+      background: rgba(245, 158, 11, 0.08);
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 14px 0 8px;
+      font-size: clamp(2rem, 4vw, 3.5rem);
+      line-height: 0.98;
+      letter-spacing: -0.05em;
+    }
+
+    .lede {
+      margin: 0;
+      max-width: 66ch;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.55;
+    }
+
+    .connection-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 22px;
+      align-items: center;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-2);
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+    }
+
+    .dot.warn {
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.12);
+    }
+
+    .dot.offline {
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.14);
+    }
+
+    .endpoint-group {
+      display: flex;
+      flex: 1 1 480px;
+      gap: 10px;
+      align-items: center;
+      margin-left: auto;
+    }
+
+    .endpoint-group label {
+      font-size: 13px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .endpoint-group input {
+      flex: 1;
+      min-width: 0;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(3, 7, 18, 0.7);
+      color: var(--text);
+      font: 14px var(--mono);
+      outline: none;
+    }
+
+    .endpoint-group button {
+      padding: 12px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(245, 158, 11, 0.24);
+      background: linear-gradient(180deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.08));
+      color: #fed7aa;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 20px;
+    }
+
+    .panel {
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .panel h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #cbd5e1;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .metric {
+      border-radius: var(--radius-sm);
+      background: rgba(2, 6, 23, 0.34);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      padding: 16px;
+    }
+
+    .metric .label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .metric .value {
+      font-size: clamp(1.5rem, 2.2vw, 2.2rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .metric .subvalue {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .temp-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .temp-item {
+      display: grid;
+      gap: 10px;
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background: rgba(2, 6, 23, 0.34);
+    }
+
+    .temp-item .row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .temp-item .name {
+      font-weight: 700;
+      text-transform: capitalize;
+    }
+
+    .temp-item .numbers {
+      color: var(--muted);
+      font-size: 13px;
+      font-family: var(--mono);
+    }
+
+    .bar {
+      position: relative;
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(148, 163, 184, 0.14);
+    }
+
+    .bar > span {
+      position: absolute;
+      inset: 0 auto 0 0;
+      border-radius: inherit;
+      width: 25%;
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.95), rgba(34, 197, 94, 0.92));
+      transition: width 180ms ease;
+    }
+
+    .chart-wrap {
+      display: grid;
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .chart {
+      width: 100%;
+      height: 100%;
+      min-height: 140px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(180deg, rgba(2, 6, 23, 0.42), rgba(2, 6, 23, 0.22));
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      overflow: hidden;
+    }
+
+    .chart svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.12);
+    }
+
+    .swatch.green {
+      background: var(--accent-2);
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
+    }
+
+    .thermal-head {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      margin-bottom: 12px;
+    }
+
+    .thermal-summary {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .thermal-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .swatch.cold {
+      background: #3b82f6;
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.14);
+    }
+
+    .swatch.hot {
+      background: #ef4444;
+      box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.14);
+    }
+
+    .thermal-frame {
+      min-height: 140px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background:
+        radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 45%),
+        radial-gradient(circle at bottom right, rgba(239, 68, 68, 0.12), transparent 45%),
+        rgba(2, 6, 23, 0.44);
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+    }
+
+    .thermal-canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      image-rendering: pixelated;
+      cursor: crosshair;
+    }
+
+    .thermal-placeholder {
+      padding: 28px;
+      color: var(--muted);
+      text-align: center;
+      max-width: 34ch;
+    }
+
+    .thermal-placeholder strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .webcam {
+      display: grid;
+      gap: 14px;
+    }
+
+    .frame {
+      min-height: 140px;
+      border-radius: var(--radius-sm);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      background:
+        radial-gradient(circle at center, rgba(245, 158, 11, 0.12), transparent 55%),
+        rgba(2, 6, 23, 0.4);
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+
+    .frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .frame .placeholder {
+      text-align: center;
+      color: var(--muted);
+      padding: 28px;
+      max-width: 28ch;
+    }
+
+    .frame .placeholder strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 1120px) {
+      .quadrant-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+        overflow-y: auto;
+      }
+
+      .shell {
+        height: auto;
+        min-height: 100vh;
+        overflow: auto;
+      }
+
+      .endpoint-group {
+        margin-left: 0;
+        width: 100%;
+        flex-basis: 100%;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        padding: 12px;
+      }
+
+      .panel {
+        padding: 14px;
+      }
+
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+
+      .endpoint-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="card topbar">
+      <h1 class="topbar-title">PrusaSAM Dashboard</h1>
+      <div class="pill"><span id="connectionDot" class="dot warn"></span><span id="connectionText">Demo mode</span></div>
+      <div class="pill">Updated <span id="updatedAt">--</span></div>
+      <div class="pill">Mode: <strong id="modeText" style="margin-left: 6px">demo</strong></div>
+      <span id="stateHeading" class="topbar-state">Waiting for data</span>
+      <div class="endpoint-group">
+        <label for="apiUrl">Python API</label>
+        <input id="apiUrl" type="text" spellcheck="false" autocomplete="off">
+        <button id="connectBtn" type="button">Connect</button>
+      </div>
+    </header>
+
+    <section class="quadrant-grid">
+      <article class="card panel quadrant quadrant-tl">
+        <h2>Print Speed</h2>
+        <div class="quadrant-body">
+          <div class="metrics">
+            <div class="metric">
+              <div class="label">Speed</div>
+              <div id="speedValue" class="value">--</div>
+              <div id="speedMeta" class="subvalue">mm/s</div>
+            </div>
+            <div class="metric">
+              <div class="label">Override</div>
+              <div id="feedrateValue" class="value">--</div>
+              <div id="feedrateMeta" class="subvalue">M220 %</div>
+            </div>
+            <div class="metric">
+              <div class="label">Status</div>
+              <div id="healthValue" class="value">--</div>
+              <div id="healthMeta" class="subvalue">--</div>
+            </div>
+          </div>
+          <div class="chart-wrap chart-quadrant-wrap">
+            <div class="chart-legend">
+              <span class="legend"><span class="swatch"></span> <span id="speedChartLegend">Print speed</span></span>
+              <span id="speedBaseMeta" class="legend" style="margin-left: auto;">Base -- mm/s</span>
+            </div>
+            <div class="chart">
+              <svg id="chartSvg" viewBox="0 0 1000 280" preserveAspectRatio="none" aria-label="Print speed chart"></svg>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card panel quadrant quadrant-tr">
+        <h2>Nozzle Temperature</h2>
+        <div class="quadrant-body">
+          <div class="metrics">
+            <div class="metric">
+              <div class="label">Actual</div>
+              <div id="nozzleActualValue" class="value">--</div>
+              <div id="nozzleActualMeta" class="subvalue">°C</div>
+            </div>
+            <div class="metric">
+              <div class="label">Target</div>
+              <div id="nozzleTargetValue" class="value">--</div>
+              <div id="nozzleTargetMeta" class="subvalue">°C</div>
+            </div>
+            <div class="metric">
+              <div class="label">Delta</div>
+              <div id="nozzleDeltaValue" class="value">--</div>
+              <div id="nozzleDeltaMeta" class="subvalue">actual − target</div>
+            </div>
+          </div>
+          <div class="chart-wrap chart-quadrant-wrap">
+            <div class="chart-legend">
+              <span class="legend"><span class="swatch hot"></span> Actual</span>
+              <span class="legend"><span class="swatch" style="background:#94a3b8"></span> Target</span>
+              <span id="nozzleChartMeta" class="legend" style="margin-left: auto;">tool0</span>
+            </div>
+            <div class="chart">
+              <svg id="nozzleChartSvg" viewBox="0 0 1000 280" preserveAspectRatio="none" aria-label="Nozzle temperature chart"></svg>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card panel quadrant quadrant-bl webcam">
+        <h2>Webcam</h2>
+        <div class="quadrant-body">
+          <div id="webcamFrame" class="camera-frame">
+            <div class="placeholder">
+              <strong>Webcam preview</strong>
+              <span>When the bridge returns a webcam URL, it appears here. In offline mode this stays as a placeholder.</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="card panel quadrant quadrant-br">
+        <div class="quadrant-body">
+          <div class="thermal-head">
+            <h2 style="margin: 0;">IR Camera</h2>
+            <div class="thermal-legend">
+              <span class="legend"><span class="swatch cold"></span> Cold</span>
+              <span class="legend"><span class="swatch hot"></span> Hot</span>
+              <span id="thermalRange" class="legend">Range: --</span>
+            </div>
+            <div id="thermalSummary" class="thermal-summary">Waiting for thermal data.</div>
+          </div>
+          <div id="thermalFrame" class="camera-frame">
+            <div class="thermal-placeholder">
+              <strong>Thermal preview</strong>
+              <span>The bridge streams a 62 by 80 thermal matrix here.</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <span id="stateDetail" class="hidden"></span>
+    <span id="stateText" class="hidden"></span>
+    <span id="tempLines" class="hidden"></span>
+    <span id="connectionSummary" class="hidden"></span>
+    <span id="errorText" class="hidden"></span>
+  </main>
+
+  <script>
+    const SPEED_SAMPLE_WINDOW = 3;
+    const NOZZLE_SAMPLE_WINDOW = 3;
+    const HISTORY_LIMIT = 180;
+    const ROI_SKIP_TOP_MIN = 28;
+    const ROI_SKIP_TOP_FALLBACK = 30;
+    const ROI_ROW_GAP = 0;
+    const ROI_BELOW_HOTTEST_GAP = 1;
+    const ROI_BOX_ROWS = 1;
+    const ROI_BOX_COLS = 4;
+    const ROI_SEARCH_ROWS = ROI_BOX_ROWS;
+    const ROI_SEARCH_COLS = ROI_BOX_COLS;
+    const ROI_N_ROWS = ROI_BOX_ROWS;
+    const ROI_N_COLS = ROI_BOX_COLS;
+    const ROI_COL_CENTER_FALLBACK = 40;
+    const HOTEND_PIXEL_MAX_C = 90;
+    const HOTEND_TRIANGLE_WARM_C = 60;
+    const HOTEND_TRIANGLE_H = 3;
+    const HOTEND_TRIANGLE_W = 7;
+    const HOTEND_COL_BAND_ROWS = 4;
+    const FILAMENT_ABOVE_BG_C = 8;
+    const ROI_TRIM_TOP_FRAC = 0.10;
+    const MIN_FILAMENT_PIXELS = 3;
+    const ROI_ROW_STABILIZE_BASE_FRAMES = 5;
+    const ROI_ROW_STABILIZE_DWELL_STEP = 10;
+    const ROI_ROW_STABILIZE_MAX_FRAMES = 45;
+    const BASE_SPEED_MMS = 170;
+    const DEFAULT_API_URL = location.protocol === 'file:'
+      ? 'http://127.0.0.1:8765/api/dashboard'
+      : '/api/dashboard';
+
+    const elements = {
+      apiUrl: document.getElementById('apiUrl'),
+      connectBtn: document.getElementById('connectBtn'),
+      connectionDot: document.getElementById('connectionDot'),
+      connectionText: document.getElementById('connectionText'),
+      updatedAt: document.getElementById('updatedAt'),
+      modeText: document.getElementById('modeText'),
+      stateHeading: document.getElementById('stateHeading'),
+      stateDetail: document.getElementById('stateDetail'),
+      speedValue: document.getElementById('speedValue'),
+      speedMeta: document.getElementById('speedMeta'),
+      feedrateValue: document.getElementById('feedrateValue'),
+      feedrateMeta: document.getElementById('feedrateMeta'),
+      speedBaseMeta: document.getElementById('speedBaseMeta'),
+      speedChartLegend: document.getElementById('speedChartLegend'),
+      healthValue: document.getElementById('healthValue'),
+      healthMeta: document.getElementById('healthMeta'),
+      chartSvg: document.getElementById('chartSvg'),
+      nozzleChartSvg: document.getElementById('nozzleChartSvg'),
+      nozzleActualValue: document.getElementById('nozzleActualValue'),
+      nozzleTargetValue: document.getElementById('nozzleTargetValue'),
+      nozzleDeltaValue: document.getElementById('nozzleDeltaValue'),
+      nozzleActualMeta: document.getElementById('nozzleActualMeta'),
+      nozzleTargetMeta: document.getElementById('nozzleTargetMeta'),
+      nozzleDeltaMeta: document.getElementById('nozzleDeltaMeta'),
+      nozzleChartMeta: document.getElementById('nozzleChartMeta'),
+      webcamFrame: document.getElementById('webcamFrame'),
+      thermalFrame: document.getElementById('thermalFrame'),
+      thermalSummary: document.getElementById('thermalSummary'),
+      thermalRange: document.getElementById('thermalRange'),
+      stateText: document.getElementById('stateText'),
+      tempLines: document.getElementById('tempLines'),
+      connectionSummary: document.getElementById('connectionSummary'),
+      errorText: document.getElementById('errorText'),
+    };
+
+    const state = {
+      apiUrl: localStorage.getItem('prusa-dashboard-api-url') || DEFAULT_API_URL,
+      history: [],
+      mode: 'demo',
+      connected: false,
+      lastSnapshot: null,
+      demoClock: 0,
+      roiRowStable: {
+        stableRow: null,
+        dwellFrames: 0,
+        candidateRow: null,
+        candidateFrames: 0,
+      },
+    };
+
+    elements.apiUrl.value = state.apiUrl;
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function formatTemp(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return 'n/a';
+      }
+      return `${Number(value).toFixed(1)} °C`;
+    }
+
+    function formatSpeed(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return 'n/a';
+      }
+      return `${Number(value).toFixed(0)} mm/s`;
+    }
+
+    function formatPercent(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) {
+        return 'n/a';
+      }
+      return `${Number(value).toFixed(0)}%`;
+    }
+
+    function formatTime(value) {
+      if (!value) {
+        return '--';
+      }
+      return value;
+    }
+
+    function formatUpdated(value) {
+      if (!value) {
+        return '--';
+      }
+      return value;
+    }
+
+    function lerp(start, end, ratio) {
+      return start + (end - start) * ratio;
+    }
+
+    function thermalColor(value, min, max) {
+      if (!Number.isFinite(value)) {
+        return [15, 23, 42];
+      }
+      const span = Math.max(max - min, 0.0001);
+      const ratio = clamp((value - min) / span, 0, 1);
+      const red = Math.round(lerp(37, 239, ratio));
+      const green = Math.round(lerp(99, 68, ratio));
+      const blue = Math.round(lerp(235, 68, ratio));
+      return [red, green, blue];
+    }
+
+    function buildDemoThermalFrame(bedActual, toolActual) {
+      const rows = 62;
+      const cols = 80;
+      const values = [];
+      const bedHotspotX = cols * 0.52;
+      const bedHotspotY = rows * 0.60;
+      const toolHotspotX = cols * 0.72;
+      const toolHotspotY = rows * 0.24;
+
+      for (let row = 0; row < rows; row += 1) {
+        const rowValues = [];
+        for (let col = 0; col < cols; col += 1) {
+          const bedDx = (col - bedHotspotX) / (cols * 0.28);
+          const bedDy = (row - bedHotspotY) / (rows * 0.24);
+          const toolDx = (col - toolHotspotX) / (cols * 0.09);
+          const toolDy = (row - toolHotspotY) / (rows * 0.11);
+          const bedGlow = Math.exp(-(bedDx * bedDx + bedDy * bedDy)) * (16 + bedActual * 0.04);
+          const toolGlow = Math.exp(-(toolDx * toolDx + toolDy * toolDy)) * (18 + toolActual * 0.05);
+          const wave = Math.sin((col + state.demoClock * 3) / 6) * 0.9 + Math.cos((row + state.demoClock) / 5) * 0.7;
+          rowValues.push(24 + bedGlow + toolGlow + wave);
+        }
+        values.push(rowValues);
+      }
+
+      let min = Infinity;
+      let max = -Infinity;
+      for (const rowValues of values) {
+        for (const value of rowValues) {
+          min = Math.min(min, value);
+          max = Math.max(max, value);
+        }
+      }
+
+      return {
+        source: 'demo',
+        connected: false,
+        updated_at: new Date().toLocaleString(),
+        error_text: '',
+        rows,
+        cols,
+        min,
+        max,
+        values,
+      };
+    }
+
+    function makeDemoSnapshot() {
+      state.demoClock += 1;
+      const now = new Date();
+      const wobble = Math.sin(state.demoClock / 4) * 2.5;
+      const bedActual = 58 + wobble;
+      const toolActual = 204 + Math.cos(state.demoClock / 3) * 4.2;
+      const feedratePercent = 100 + Math.sin(state.demoClock / 5) * 18;
+      const speedMms = BASE_SPEED_MMS * (feedratePercent / 100);
+      return {
+        source: 'demo',
+        connected: false,
+        mode: 'demo',
+        updated_at: now.toLocaleString(),
+        state_text: 'State: Offline demo',
+        is_printing: false,
+        error_text: '',
+        temperatures: {
+          bed: { actual: bedActual, target: 60, offset: 0 },
+          tool0: { actual: toolActual, target: 210, offset: 0 },
+        },
+        temperature_lines: [
+          `bed: actual=${bedActual.toFixed(1)}, target=60.0, offset=0`,
+          `tool0: actual=${toolActual.toFixed(1)}, target=210.0, offset=0`,
+        ],
+        speed: {
+          feedrate_percent: feedratePercent,
+          speed_mms: speedMms,
+          base_speed_mms: BASE_SPEED_MMS,
+          source: 'demo',
+          print_number: null,
+          layer: null,
+          rl_active: false,
+        },
+        thermal_frame: buildDemoThermalFrame(bedActual, toolActual),
+        thermal_summary: 'Offline demo thermal data is being generated locally in the browser.',
+        webcam_url: '',
+        connection_summary: 'Offline demo data is being generated locally in the browser.',
+      };
+    }
+
+    function normalizeSnapshot(snapshot, source) {
+      const temperatures = snapshot.temperatures || {};
+      const speed = snapshot.speed || {};
+      const baseSpeed = Number.isFinite(speed.base_speed_mms) ? speed.base_speed_mms : BASE_SPEED_MMS;
+      const feedratePercent = speed.feedrate_percent ?? null;
+      return {
+        source: source || snapshot.source || 'python',
+        connected: Boolean(snapshot.connected ?? true),
+        mode: snapshot.mode || (snapshot.connected === false ? 'demo' : 'live'),
+        updated_at: snapshot.updated_at || new Date().toLocaleString(),
+        state_text: snapshot.state_text || 'State: unknown',
+        is_printing: Boolean(snapshot.is_printing),
+        error_text: snapshot.error_text || '',
+        temperatures: {
+          bed: temperatures.bed || null,
+          tool0: temperatures.tool0 || null,
+        },
+        temperature_lines: Array.isArray(snapshot.temperature_lines) ? snapshot.temperature_lines : [],
+        speed: {
+          feedrate_percent: feedratePercent,
+          speed_mms: speed.speed_mms ?? (
+            feedratePercent === null ? null : baseSpeed * (feedratePercent / 100)
+          ),
+          base_speed_mms: baseSpeed,
+          source: speed.source || 'octoprint',
+          print_number: speed.print_number ?? null,
+          layer: speed.layer ?? null,
+          rl_active: Boolean(speed.rl_active),
+        },
+        thermal_frame: snapshot.thermal_frame || null,
+        thermal_summary: snapshot.thermal_summary || '',
+        webcam_url: snapshot.webcam_url || '',
+        connection_summary: snapshot.connection_summary || '',
+      };
+    }
+
+    function pushHistory(snapshot) {
+      const now = Date.now();
+      const speed = snapshot.speed || {};
+      const tool0 = (snapshot.temperatures && snapshot.temperatures.tool0) || {};
+      state.history.push({
+        time: now,
+        speedMms: speed.speed_mms ?? null,
+        feedratePercent: speed.feedrate_percent ?? null,
+        nozzleActual: tool0.actual ?? null,
+        nozzleTarget: tool0.target ?? null,
+      });
+      if (state.history.length > HISTORY_LIMIT) {
+        state.history.splice(0, state.history.length - HISTORY_LIMIT);
+      }
+    }
+
+    function recentSpeedHistory() {
+      const cutoff = Date.now() - SPEED_SAMPLE_WINDOW * 60 * 1000;
+      return state.history.filter((sample) => sample.time >= cutoff);
+    }
+
+    function recentNozzleHistory() {
+      const cutoff = Date.now() - NOZZLE_SAMPLE_WINDOW * 60 * 1000;
+      return state.history.filter((sample) => sample.time >= cutoff);
+    }
+
+    function detectDepositRowStart(values, rows) {
+      let lastHotRow = -1;
+      let seenHot = false;
+      for (let row = 0; row < rows; row += 1) {
+        const rowValues = values[row] || [];
+        let rowMax = -Infinity;
+        for (const value of rowValues) {
+          if (Number.isFinite(value)) {
+            rowMax = Math.max(rowMax, value);
+          }
+        }
+        if (Number.isFinite(rowMax) && rowMax >= HOTEND_PIXEL_MAX_C) {
+          lastHotRow = row;
+          seenHot = true;
+        } else if (seenHot) {
+          return Math.max(lastHotRow + 1, ROI_SKIP_TOP_MIN);
+        }
+      }
+      if (seenHot) {
+        return Math.min(
+          Math.max(lastHotRow + 1, ROI_SKIP_TOP_MIN),
+          Math.max(0, rows - ROI_N_ROWS),
+        );
+      }
+      return Math.min(ROI_SKIP_TOP_FALLBACK, Math.max(0, rows - ROI_N_ROWS));
+    }
+
+    function detectHotendColCenter(values, depositRowStart, cols) {
+      if (depositRowStart <= 0 || !cols) {
+        return Math.min(cols - 1, Math.max(0, ROI_COL_CENTER_FALLBACK));
+      }
+      const bandTop = Math.max(0, depositRowStart - HOTEND_COL_BAND_ROWS);
+      const hotCols = [];
+      for (let row = bandTop; row < depositRowStart; row += 1) {
+        const rowValues = values[row] || [];
+        for (let col = 0; col < rowValues.length; col += 1) {
+          const value = rowValues[col];
+          if (Number.isFinite(value) && value >= HOTEND_PIXEL_MAX_C) {
+            hotCols.push(col);
+          }
+        }
+      }
+      if (!hotCols.length) {
+        for (let row = bandTop; row < depositRowStart; row += 1) {
+          const rowValues = values[row] || [];
+          for (let col = 0; col < rowValues.length; col += 1) {
+            const value = rowValues[col];
+            if (Number.isFinite(value) && value >= HOTEND_TRIANGLE_WARM_C) {
+              hotCols.push(col);
+            }
+          }
+        }
+      }
+      if (!hotCols.length) {
+        return Math.min(cols - 1, Math.max(0, ROI_COL_CENTER_FALLBACK));
+      }
+      hotCols.sort((left, right) => left - right);
+      const mid = Math.floor(hotCols.length / 2);
+      return hotCols.length % 2 ? hotCols[mid] : Math.round((hotCols[mid - 1] + hotCols[mid]) / 2);
+    }
+
+    function estimateBackground(values, boxRowEnd, rows, cols) {
+      const cold = [];
+      for (let row = boxRowEnd; row < rows; row += 1) {
+        const rowValues = values[row] || [];
+        for (let col = 0; col < cols; col += 1) {
+          const value = rowValues[col];
+          if (Number.isFinite(value) && value < HOTEND_PIXEL_MAX_C) {
+            cold.push(value);
+          }
+        }
+      }
+      if (cold.length < 20) {
+        for (let row = 0; row < rows; row += 1) {
+          const rowValues = values[row] || [];
+          for (let col = 0; col < cols; col += 1) {
+            const value = rowValues[col];
+            if (Number.isFinite(value) && value < HOTEND_PIXEL_MAX_C) {
+              cold.push(value);
+            }
+          }
+        }
+      }
+      if (!cold.length) {
+        return 30;
+      }
+      cold.sort((left, right) => left - right);
+      const index = Math.max(0, Math.floor(cold.length * 0.2) - 1);
+      return cold[index];
+    }
+
+    function isInsideHotendTriangle(row, rowStart, col, hotCol) {
+      const triRow = row - rowStart;
+      if (triRow < 0 || triRow >= HOTEND_TRIANGLE_H) {
+        return false;
+      }
+      const baseHalf = Math.floor(HOTEND_TRIANGLE_W / 2);
+      const halfW = HOTEND_TRIANGLE_H <= 1
+        ? 0
+        : Math.round(baseHalf * (HOTEND_TRIANGLE_H - 1 - triRow) / (HOTEND_TRIANGLE_H - 1));
+      return Math.abs(col - hotCol) <= halfW;
+    }
+
+    function hottestRowBottom(values, rows, cols) {
+      let frameMax = -Infinity;
+      for (let row = 0; row < rows; row += 1) {
+        const rowValues = values[row] || [];
+        for (let col = 0; col < cols; col += 1) {
+          const value = rowValues[col];
+          if (Number.isFinite(value)) {
+            frameMax = Math.max(frameMax, value);
+          }
+        }
+      }
+      if (!Number.isFinite(frameMax)) {
+        return 0;
+      }
+      let bottom = 0;
+      for (let row = 0; row < rows; row += 1) {
+        const rowValues = values[row] || [];
+        for (let col = 0; col < cols; col += 1) {
+          const value = rowValues[col];
+          if (Number.isFinite(value) && value >= frameMax) {
+            bottom = Math.max(bottom, row);
+          }
+        }
+      }
+      return bottom;
+    }
+
+    function boxOverlapsHottest(values, rowStart, rowEnd, rows, cols) {
+      if (rowStart >= rowEnd) {
+        return false;
+      }
+      let frameMax = -Infinity;
+      for (let row = 0; row < rows; row += 1) {
+        const rowValues = values[row] || [];
+        for (let col = 0; col < cols; col += 1) {
+          const value = rowValues[col];
+          if (Number.isFinite(value)) {
+            frameMax = Math.max(frameMax, value);
+          }
+        }
+      }
+      if (!Number.isFinite(frameMax)) {
+        return false;
+      }
+      for (let row = rowStart; row < rowEnd; row += 1) {
+        const rowValues = values[row] || [];
+        for (let col = 0; col < cols; col += 1) {
+          const value = rowValues[col];
+          if (Number.isFinite(value) && value >= frameMax) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function minRowBelowNozzle(values, rows, cols) {
+      return Math.min(
+        hottestRowBottom(values, rows, cols) + 1 + ROI_BELOW_HOTTEST_GAP,
+        Math.max(0, rows - 1),
+      );
+    }
+
+    function boxIsBelowNozzle(values, rowStart, rows, cols) {
+      return rowStart >= minRowBelowNozzle(values, rows, cols);
+    }
+
+    function clampBoxBelowHottest(values, rowStart, rowEnd, rows, cols) {
+      const floor = minRowBelowNozzle(values, rows, cols);
+      if (rowStart >= floor) {
+        return { rowStart, rowEnd };
+      }
+      return {
+        rowStart: floor,
+        rowEnd: Math.min(floor + ROI_BOX_ROWS, rows),
+      };
+    }
+
+    function roiRowSwitchThreshold(stable) {
+      if (stable.stableRow === null || stable.stableRow === undefined) {
+        return 1;
+      }
+      const extra = Math.floor(stable.dwellFrames / Math.max(1, ROI_ROW_STABILIZE_DWELL_STEP));
+      return Math.min(
+        ROI_ROW_STABILIZE_MAX_FRAMES,
+        ROI_ROW_STABILIZE_BASE_FRAMES + extra,
+      );
+    }
+
+    function stabilizeRoiRow(proposedRow) {
+      const stable = state.roiRowStable;
+      if (stable.stableRow === null || stable.stableRow === undefined) {
+        stable.stableRow = proposedRow;
+        stable.dwellFrames = 1;
+        stable.candidateRow = null;
+        stable.candidateFrames = 0;
+        return proposedRow;
+      }
+
+      if (proposedRow === stable.stableRow) {
+        stable.dwellFrames += 1;
+        stable.candidateRow = null;
+        stable.candidateFrames = 0;
+        return stable.stableRow;
+      }
+
+      if (proposedRow === stable.candidateRow) {
+        stable.candidateFrames += 1;
+      } else {
+        stable.candidateRow = proposedRow;
+        stable.candidateFrames = 1;
+      }
+
+      if (stable.candidateFrames >= roiRowSwitchThreshold(stable)) {
+        stable.stableRow = proposedRow;
+        stable.dwellFrames = 1;
+        stable.candidateRow = null;
+        stable.candidateFrames = 0;
+      }
+      return stable.stableRow;
+    }
+
+    function forceRoiRow(row) {
+      const stable = state.roiRowStable;
+      stable.stableRow = row;
+      stable.dwellFrames = 1;
+      stable.candidateRow = null;
+      stable.candidateFrames = 0;
+      return row;
+    }
+
+    function depositBoxBounds(values, rows, cols) {
+      const hotBandEnd = detectDepositRowStart(values, rows);
+      let proposedStart = Math.min(hotBandEnd + ROI_ROW_GAP, Math.max(0, rows - 1));
+      let proposedEnd = Math.min(proposedStart + ROI_BOX_ROWS, rows);
+      ({ rowStart: proposedStart, rowEnd: proposedEnd } = clampBoxBelowHottest(
+        values,
+        proposedStart,
+        proposedEnd,
+        rows,
+        cols,
+      ));
+
+      let rowStart = stabilizeRoiRow(proposedStart);
+      let rowEnd = Math.min(rowStart + ROI_BOX_ROWS, rows);
+      if (
+        !boxIsBelowNozzle(values, rowStart, rows, cols)
+        || boxOverlapsHottest(values, rowStart, rowEnd, rows, cols)
+      ) {
+        const forced = clampBoxBelowHottest(values, rowStart, rowEnd, rows, cols);
+        rowStart = forceRoiRow(forced.rowStart);
+        rowEnd = Math.min(rowStart + ROI_BOX_ROWS, rows);
+      }
+
+      const hotCol = detectHotendColCenter(values, rowStart, cols);
+      const half = Math.floor(ROI_BOX_COLS / 2);
+      let colStart = Math.max(0, hotCol - half);
+      let colEnd = Math.min(cols, colStart + ROI_BOX_COLS);
+      colStart = Math.max(0, colEnd - ROI_BOX_COLS);
+      return { rowStart, rowEnd, colStart, colEnd, hotCol };
+    }
+
+    function percentile(sortedValues, fraction) {
+      if (!sortedValues.length) {
+        return Number.NaN;
+      }
+      const index = Math.min(
+        sortedValues.length - 1,
+        Math.max(0, Math.floor((sortedValues.length - 1) * fraction)),
+      );
+      return sortedValues[index];
+    }
+
+    function trimHotPixels(temps) {
+      if (temps.length <= 1 || ROI_TRIM_TOP_FRAC <= 0) {
+        return temps;
+      }
+      const cutoff = percentile(temps, 1 - ROI_TRIM_TOP_FRAC);
+      const trimmed = temps.filter((value) => value <= cutoff);
+      return trimmed.length ? trimmed : temps;
+    }
+
+    function collectFilamentPixels(values, rowStart, rowEnd, colStart, colEnd, hotCol) {
+      const background = estimateBackground(values, rowEnd, values.length, colEnd);
+      const minTemp = background + FILAMENT_ABOVE_BG_C;
+      const filament = [];
+
+      for (let row = rowStart; row < rowEnd; row += 1) {
+        const rowValues = values[row] || [];
+        for (let col = colStart; col < colEnd; col += 1) {
+          const value = rowValues[col];
+          if (!Number.isFinite(value) || value >= HOTEND_PIXEL_MAX_C || value < minTemp) {
+            continue;
+          }
+          if (isInsideHotendTriangle(row, rowStart, col, hotCol)) {
+            continue;
+          }
+          filament.push({ row, col, value });
+        }
+      }
+
+      if (filament.length < MIN_FILAMENT_PIXELS) {
+        filament.length = 0;
+        for (let row = rowStart; row < rowEnd; row += 1) {
+          const rowValues = values[row] || [];
+          for (let col = colStart; col < colEnd; col += 1) {
+            const value = rowValues[col];
+            if (
+              Number.isFinite(value)
+              && value < HOTEND_PIXEL_MAX_C
+              && !isInsideHotendTriangle(row, rowStart, col, hotCol)
+            ) {
+              filament.push({ row, col, value });
+            }
+          }
+        }
+      }
+
+      if (filament.length < MIN_FILAMENT_PIXELS) {
+        filament.length = 0;
+        for (let row = rowStart; row < rowEnd; row += 1) {
+          const rowValues = values[row] || [];
+          for (let col = colStart; col < colEnd; col += 1) {
+            const value = rowValues[col];
+            if (Number.isFinite(value) && !isInsideHotendTriangle(row, rowStart, col, hotCol)) {
+              filament.push({ row, col, value });
+            }
+          }
+        }
+      }
+
+      return { filament, background };
+    }
+
+    function computeRoiStats(thermal) {
+      if (!thermal || !Array.isArray(thermal.values) || !thermal.values.length) {
+        return null;
+      }
+      if (thermal.roi && Number.isFinite(thermal.roi.roi_max)) {
+        return thermal.roi;
+      }
+
+      const rows = thermal.rows || thermal.values.length;
+      const cols = thermal.cols || (thermal.values[0] ? thermal.values[0].length : 0);
+      const box = depositBoxBounds(thermal.values, rows, cols);
+      if (box.rowStart >= box.rowEnd || box.colStart >= box.colEnd) {
+        return null;
+      }
+
+      const { filament, background } = collectFilamentPixels(
+        thermal.values,
+        box.rowStart,
+        box.rowEnd,
+        box.colStart,
+        box.colEnd,
+        box.hotCol,
+      );
+      if (!filament.length) {
+        return null;
+      }
+
+      const temps = trimHotPixels(filament.map((pixel) => pixel.value).sort((left, right) => left - right));
+      const mean = temps.reduce((sum, value) => sum + value, 0) / temps.length;
+      let variance = 0;
+      for (const value of temps) {
+        const delta = value - mean;
+        variance += delta * delta;
+      }
+      const mid = Math.floor(temps.length / 2);
+      const median = temps.length % 2
+        ? temps[mid]
+        : (temps[mid - 1] + temps[mid]) / 2;
+
+      return {
+        roi_max: temps[temps.length - 1],
+        roi_mean: mean,
+        roi_min: temps[0],
+        roi_std: Math.sqrt(variance / temps.length),
+        roi_median: median,
+        deposit_temp_c: percentile(temps, 0.9),
+        roi_row_start: box.rowStart,
+        roi_row_end: box.rowEnd,
+        roi_col_start: box.colStart,
+        roi_col_end: box.colEnd,
+        roi_skip_top: box.rowStart,
+        roi_n_rows: box.rowEnd - box.rowStart,
+        roi_n_cols: box.colEnd - box.colStart,
+        filament_pixel_count: filament.length,
+        background_temp_c: background,
+        hotend_col: box.hotCol,
+        hotend_triangle_h: HOTEND_TRIANGLE_H,
+        hotend_triangle_w: HOTEND_TRIANGLE_W,
+        roi_trim_top_frac: ROI_TRIM_TOP_FRAC,
+        hotend_pixel_max_c: HOTEND_PIXEL_MAX_C,
+      };
+    }
+
+    function renderNozzleMetrics(snapshot) {
+      const tool0 = (snapshot.temperatures && snapshot.temperatures.tool0) || {};
+      const actual = tool0.actual;
+      const target = tool0.target;
+      elements.nozzleActualValue.textContent = Number.isFinite(actual)
+        ? Number(actual).toFixed(1)
+        : '--';
+      elements.nozzleTargetValue.textContent = Number.isFinite(target)
+        ? Number(target).toFixed(1)
+        : '--';
+      if (Number.isFinite(actual) && Number.isFinite(target)) {
+        const delta = actual - target;
+        elements.nozzleDeltaValue.textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`;
+      } else {
+        elements.nozzleDeltaValue.textContent = '--';
+      }
+      elements.nozzleChartMeta.textContent = 'tool0';
+    }
+
+    function updateThermalViews(snapshot) {
+      renderThermal(snapshot);
+    }
+
+    function setConnectionStatus(kind, message) {
+      elements.connectionDot.className = 'dot';
+      if (kind === 'offline') {
+        elements.connectionDot.classList.add('offline');
+      } else if (kind === 'warn') {
+        elements.connectionDot.classList.add('warn');
+      }
+      elements.connectionText.textContent = message;
+      elements.connectionSummary.textContent = message;
+    }
+
+    function renderWebcam(snapshot) {
+      const frame = elements.webcamFrame;
+      frame.innerHTML = '';
+      if (!snapshot.webcam_url) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'placeholder';
+        placeholder.innerHTML = '<strong>Webcam preview</strong><span>No webcam URL is being supplied by the current data source.</span>';
+        frame.appendChild(placeholder);
+        return;
+      }
+      const img = document.createElement('img');
+      img.alt = 'Printer webcam preview';
+      img.src = snapshot.webcam_url;
+      img.onerror = () => {
+        frame.innerHTML = '<div class="placeholder"><strong>Webcam unavailable</strong><span>The stream URL was returned, but the browser could not load it.</span></div>';
+      };
+      frame.appendChild(img);
+    }
+
+    function fitThermalCanvas(canvas, frame) {
+      const cols = canvas.width;
+      const rows = canvas.height;
+      if (!cols || !rows) {
+        return;
+      }
+      const frameWidth = frame.clientWidth;
+      const frameHeight = frame.clientHeight;
+      if (!frameWidth || !frameHeight) {
+        return;
+      }
+      const aspect = cols / rows;
+      let displayWidth = frameWidth;
+      let displayHeight = displayWidth / aspect;
+      if (displayHeight > frameHeight) {
+        displayHeight = frameHeight;
+        displayWidth = displayHeight * aspect;
+      }
+      canvas.style.width = `${Math.floor(displayWidth)}px`;
+      canvas.style.height = `${Math.floor(displayHeight)}px`;
+    }
+
+    function defaultThermalSummary(snapshot, thermal) {
+      return snapshot.thermal_summary
+        || `Thermal feed ${thermal.connected ? 'live' : 'reconnecting'} · updated ${formatUpdated(thermal.updated_at)}`;
+    }
+
+    function thermalPixelFromPointer(canvas, clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      if (!rect.width || !rect.height) {
+        return null;
+      }
+      const col = Math.floor(((clientX - rect.left) / rect.width) * canvas.width);
+      const row = Math.floor(((clientY - rect.top) / rect.height) * canvas.height);
+      if (row < 0 || row >= canvas.height || col < 0 || col >= canvas.width) {
+        return null;
+      }
+      return { row, col };
+    }
+
+    function attachThermalPixelHover(canvas, thermal, snapshot) {
+      const defaultSummary = defaultThermalSummary(snapshot, thermal);
+      canvas.addEventListener('mousemove', (event) => {
+        const pixel = thermalPixelFromPointer(canvas, event.clientX, event.clientY);
+        if (!pixel) {
+          elements.thermalSummary.textContent = defaultSummary;
+          return;
+        }
+        const rowValues = thermal.values[pixel.row] || [];
+        const value = rowValues[pixel.col];
+        if (!Number.isFinite(value)) {
+          elements.thermalSummary.textContent = `Pixel r${pixel.row} c${pixel.col}: n/a`;
+          return;
+        }
+        elements.thermalSummary.textContent = `Pixel r${pixel.row} c${pixel.col}: ${formatTemp(value)}`;
+      });
+      canvas.addEventListener('mouseleave', () => {
+        elements.thermalSummary.textContent = defaultSummary;
+      });
+    }
+
+    function drawRoiCornerPixels(context, colStart, rowStart, colEnd, rowEnd) {
+      if (colEnd <= colStart || rowEnd <= rowStart) {
+        return;
+      }
+
+      context.fillStyle = 'rgba(52, 211, 153, 1)';
+      context.fillRect(colStart, rowStart, 1, 1);
+      context.fillRect(colEnd - 1, rowStart, 1, 1);
+      context.fillRect(colEnd - 1, rowEnd - 1, 1, 1);
+      context.fillRect(colStart, rowEnd - 1, 1, 1);
+    }
+
+    function renderThermal(snapshot) {
+      const frame = elements.thermalFrame;
+      frame.innerHTML = '';
+
+      const thermal = snapshot.thermal_frame;
+      if (!thermal || !Array.isArray(thermal.values) || !thermal.values.length) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'thermal-placeholder';
+        placeholder.innerHTML = '<strong>Thermal preview</strong><span>No thermal matrix is available yet.</span>';
+        frame.appendChild(placeholder);
+        elements.thermalSummary.textContent = snapshot.thermal_summary || 'Waiting for thermal data from the bridge.';
+        elements.thermalRange.textContent = 'Range: --';
+        return;
+      }
+
+      const rows = thermal.rows || thermal.values.length;
+      const cols = thermal.cols || (thermal.values[0] ? thermal.values[0].length : 0);
+      const canvas = document.createElement('canvas');
+      canvas.className = 'thermal-canvas';
+      canvas.width = cols;
+      canvas.height = rows;
+      frame.appendChild(canvas);
+
+      const context = canvas.getContext('2d', { alpha: false });
+      if (!context) {
+        return;
+      }
+
+      context.imageSmoothingEnabled = false;
+      const image = context.createImageData(cols, rows);
+      let min = Number.isFinite(thermal.min) ? thermal.min : Infinity;
+      let max = Number.isFinite(thermal.max) ? thermal.max : -Infinity;
+
+      if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        for (const rowValues of thermal.values) {
+          for (const value of rowValues) {
+            if (Number.isFinite(value)) {
+              min = Math.min(min, value);
+              max = Math.max(max, value);
+            }
+          }
+        }
+      }
+
+      for (let row = 0; row < rows; row += 1) {
+        const rowValues = thermal.values[row] || [];
+        for (let col = 0; col < cols; col += 1) {
+          const value = rowValues[col];
+          const [red, green, blue] = thermalColor(value, min, max);
+          const index = (row * cols + col) * 4;
+          image.data[index] = red;
+          image.data[index + 1] = green;
+          image.data[index + 2] = blue;
+          image.data[index + 3] = 255;
+        }
+      }
+
+      context.putImageData(image, 0, 0);
+
+      const roiStats = computeRoiStats(thermal);
+      if (roiStats && Number.isFinite(roiStats.roi_row_start) && Number.isFinite(roiStats.roi_col_start)) {
+        drawRoiCornerPixels(
+          context,
+          roiStats.roi_col_start,
+          roiStats.roi_row_start,
+          roiStats.roi_col_end,
+          roiStats.roi_row_end,
+        );
+      }
+
+      fitThermalCanvas(canvas, frame);
+      attachThermalPixelHover(canvas, thermal, snapshot);
+      elements.thermalSummary.textContent = defaultThermalSummary(snapshot, thermal);
+      elements.thermalRange.textContent = `Range: ${formatTemp(min)} to ${formatTemp(max)}`;
+    }
+
+    function renderLineChart(svg, samples, series, windowMinutes) {
+      const sampleWindow = windowMinutes ?? SPEED_SAMPLE_WINDOW;
+      const width = 1000;
+      const height = 280;
+      const left = 42;
+      const right = 18;
+      const top = 16;
+      const bottom = 32;
+      const plotWidth = width - left - right;
+      const plotHeight = height - top - bottom;
+      const allValues = [];
+      for (const sample of samples) {
+        for (const entry of series) {
+          const value = entry.getter(sample);
+          if (value !== null && value !== undefined) {
+            allValues.push(value);
+          }
+        }
+      }
+
+      const domainMin = allValues.length ? Math.max(0, Math.min(...allValues) - 6) : 0;
+      const domainMax = allValues.length ? Math.max(...allValues) + 6 : 100;
+      const range = Math.max(domainMax - domainMin, 1);
+      const now = samples.length ? samples[samples.length - 1].time : Date.now();
+      const start = now - sampleWindow * 60 * 1000;
+
+      const project = (time, value) => {
+        const xRatio = clamp((time - start) / (sampleWindow * 60 * 1000), 0, 1);
+        const yRatio = (value - domainMin) / range;
+        const x = left + xRatio * plotWidth;
+        const y = top + (1 - yRatio) * plotHeight;
+        return [x, y];
+      };
+
+      const segments = (getter) => {
+        const lines = [];
+        let current = [];
+        for (const sample of samples) {
+          const value = getter(sample);
+          if (value === null || value === undefined) {
+            if (current.length) {
+              lines.push(current);
+              current = [];
+            }
+            continue;
+          }
+          current.push(project(sample.time, value));
+        }
+        if (current.length) {
+          lines.push(current);
+        }
+        return lines;
+      };
+
+      const linePath = (points) => points.map(([x, y], index) => `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`).join(' ');
+      const paths = [];
+      for (const entry of series) {
+        for (const points of segments(entry.getter)) {
+          const dash = entry.dash ? ` stroke-dasharray="${entry.dash}"` : '';
+          paths.push(`<path d="${linePath(points)}" fill="none" stroke="${entry.color}" stroke-width="${entry.width}"${dash} stroke-linecap="round" stroke-linejoin="round" />`);
+        }
+      }
+
+      const grid = [];
+      const ticks = 4;
+      for (let i = 0; i <= ticks; i += 1) {
+        const ratio = i / ticks;
+        const y = top + ratio * plotHeight;
+        const value = domainMax - ratio * range;
+        grid.push(`<line x1="${left}" y1="${y.toFixed(2)}" x2="${width - right}" y2="${y.toFixed(2)}" stroke="rgba(148,163,184,0.16)" />`);
+        grid.push(`<text x="${left - 8}" y="${(y + 4).toFixed(2)}" fill="#94a3b8" text-anchor="end" font-size="12">${value.toFixed(0)}</text>`);
+      }
+      for (let i = 0; i <= 3; i += 1) {
+        const ratio = i / 3;
+        const x = left + ratio * plotWidth;
+        const minutes = Math.round(sampleWindow * (1 - ratio));
+        grid.push(`<line x1="${x.toFixed(2)}" y1="${top}" x2="${x.toFixed(2)}" y2="${height - bottom}" stroke="rgba(148,163,184,0.12)" />`);
+        grid.push(`<text x="${x.toFixed(2)}" y="${height - 10}" fill="#94a3b8" text-anchor="middle" font-size="12">${minutes} min</text>`);
+      }
+
+      svg.innerHTML = [
+        `<rect x="0" y="0" width="1000" height="280" rx="18" fill="transparent" />`,
+        ...grid,
+        `<rect x="${left}" y="${top}" width="${plotWidth}" height="${plotHeight}" rx="14" fill="rgba(2,6,23,0.1)" stroke="rgba(148,163,184,0.12)" />`,
+        ...paths,
+      ].join('');
+    }
+
+    function renderChart() {
+      renderLineChart(elements.chartSvg, recentSpeedHistory(), [
+        { getter: (sample) => sample.speedMms, color: '#f59e0b', width: 3 },
+      ], SPEED_SAMPLE_WINDOW);
+    }
+
+    function renderNozzleChart() {
+      renderLineChart(elements.nozzleChartSvg, recentNozzleHistory(), [
+        { getter: (sample) => sample.nozzleActual, color: '#ef4444', width: 3 },
+        { getter: (sample) => sample.nozzleTarget, color: '#94a3b8', width: 2.5, dash: '10 8' },
+      ], NOZZLE_SAMPLE_WINDOW);
+    }
+
+    function renderSnapshot(snapshot) {
+      state.lastSnapshot = snapshot;
+      state.mode = snapshot.mode || (snapshot.source === 'demo' ? 'demo' : 'live');
+      state.connected = Boolean(snapshot.connected);
+
+      elements.modeText.textContent = state.mode;
+      elements.updatedAt.textContent = formatUpdated(snapshot.updated_at);
+      elements.stateHeading.textContent = snapshot.state_text || 'State: unknown';
+      elements.stateDetail.textContent = snapshot.is_printing
+        ? 'The printer reports an active print job.'
+        : 'The printer is idle or in a non-printing state.';
+      elements.stateText.textContent = snapshot.state_text || 'State: unknown';
+      elements.errorText.textContent = snapshot.error_text || 'None';
+      elements.tempLines.textContent = snapshot.temperature_lines && snapshot.temperature_lines.length
+        ? snapshot.temperature_lines.join('\n')
+        : 'No temperature sensor data returned.';
+
+      const speed = snapshot.speed || {};
+      const baseSpeed = speed.base_speed_mms ?? BASE_SPEED_MMS;
+      elements.speedValue.textContent = Number.isFinite(speed.speed_mms)
+        ? Number(speed.speed_mms).toFixed(0)
+        : '--';
+      if (speed.source === 'rl_layer_logger') {
+        const layerLabel = speed.layer != null ? ` · L${speed.layer}` : '';
+        elements.speedMeta.textContent = `RL logger${layerLabel}`;
+        elements.feedrateMeta.textContent = speed.print_number != null
+          ? `print #${speed.print_number}`
+          : 'RL logger';
+      } else {
+        elements.speedMeta.textContent = 'mm/s';
+        elements.feedrateMeta.textContent = 'M220 %';
+      }
+      elements.feedrateValue.textContent = Number.isFinite(speed.feedrate_percent)
+        ? Number(speed.feedrate_percent).toFixed(0)
+        : '--';
+      const baseLabel = speed.source === 'rl_layer_logger' ? 'RL speed' : 'Print speed';
+      elements.speedBaseMeta.textContent = `${baseLabel} · base ${Number(baseSpeed).toFixed(0)} mm/s`;
+      elements.speedChartLegend.textContent = speed.source === 'rl_layer_logger'
+        ? 'RL logger speed'
+        : 'Print speed';
+      elements.healthValue.textContent = snapshot.connected ? 'Live' : 'Demo';
+      elements.healthMeta.textContent = snapshot.is_printing ? 'printing' : 'idle';
+
+      const connectionKind = snapshot.connected ? 'online' : 'offline';
+      setConnectionStatus(connectionKind, snapshot.connection_summary || (snapshot.connected ? 'Connected to Python bridge.' : 'Offline demo data is active.'));
+      renderWebcam(snapshot);
+      updateThermalViews(snapshot);
+      renderNozzleMetrics(snapshot);
+      pushHistory(snapshot);
+      renderChart();
+      renderNozzleChart();
+    }
+
+    async function fetchSnapshot() {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      try {
+        const response = await fetch(state.apiUrl, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        return normalizeSnapshot(payload, 'python');
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    async function fetchThermalSnapshot() {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1000);
+      try {
+        const url = state.apiUrl.replace(/\/api\/dashboard\/?$/, '/api/thermal');
+        const response = await fetch(url, { method: 'GET', cache: 'no-store', signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!payload.ok) throw new Error(payload.error || 'no thermal');
+        return payload.thermal;
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    async function refresh() {
+      elements.connectionText.textContent = 'Checking Python bridge...';
+      try {
+        const snapshot = await fetchSnapshot();
+        snapshot.connected = true;
+        snapshot.mode = snapshot.error_text ? 'offline' : 'live';
+        snapshot.connection_summary = snapshot.error_text
+          ? `Bridge connected; OctoPrint unavailable (${snapshot.error_text})`
+          : `Connected to ${state.apiUrl}`;
+        renderSnapshot(snapshot);
+      } catch (error) {
+        const snapshot = normalizeSnapshot(makeDemoSnapshot(), 'demo');
+        snapshot.connected = false;
+        snapshot.error_text = error instanceof Error ? error.message : String(error);
+        snapshot.connection_summary = 'Python bridge unavailable, so the offline demo is being shown.';
+        renderSnapshot(snapshot);
+      }
+    }
+
+    function saveApiUrl() {
+      state.apiUrl = elements.apiUrl.value.trim() || DEFAULT_API_URL;
+      localStorage.setItem('prusa-dashboard-api-url', state.apiUrl);
+    }
+
+    elements.connectBtn.addEventListener('click', async () => {
+      saveApiUrl();
+      await refresh();
+    });
+
+    elements.apiUrl.addEventListener('keydown', async (event) => {
+      if (event.key === 'Enter') {
+        saveApiUrl();
+        await refresh();
+      }
+    });
+
+    setInterval(() => {
+      if (state.connected) {
+        refresh();
+      } else {
+        renderSnapshot(normalizeSnapshot(makeDemoSnapshot(), 'demo'));
+      }
+    }, 3000);
+
+    // Fast thermal polling (separate from main snapshot) when connected
+    setInterval(async () => {
+      if (!state.connected) return;
+      try {
+        const thermal = await fetchThermalSnapshot();
+        updateThermalViews({
+          thermal_frame: thermal,
+          thermal_summary: `Thermal feed live · updated ${formatUpdated(thermal.updated_at)}`,
+        });
+      } catch (e) {
+        // ignore fast-thermal failures; main refresh will handle fallback
+      }
+    }, 500);
+
+    renderSnapshot(normalizeSnapshot(makeDemoSnapshot(), 'demo'));
+    refresh();
+
+    window.addEventListener('resize', () => {
+      const canvas = elements.thermalFrame.querySelector('.thermal-canvas');
+      if (canvas) {
+        fitThermalCanvas(canvas, elements.thermalFrame);
+      }
+    });
+  </script>
+</body>
+</html>

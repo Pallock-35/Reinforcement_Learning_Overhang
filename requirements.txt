@@ -1,0 +1,15 @@
+# Core — dashboard, OctoPrint, thermal/MPC, CNN
+numpy
+scipy
+requests
+Pillow
+torch
+opencv-python
+matplotlib
+cmapy
+pyserial
+crcmod
+
+# Optional — offline SAC training (train_sac_thermal.py)
+gymnasium
+stable-baselines3

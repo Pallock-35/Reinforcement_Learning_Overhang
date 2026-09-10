@@ -1,0 +1,6 @@
+{
+  "base_001_overhang60": "1-15:normal,16-58:normal",
+  "base_001_overhang70": "4-15:normal,16-43:defective",
+    "base_001_overhang75": "1-15:normal,16-35:defective",
+    "base_001_overhang80": "1-15:normal,16-28:defective"
+}

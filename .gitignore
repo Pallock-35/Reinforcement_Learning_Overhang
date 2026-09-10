@@ -1,0 +1,12 @@
+/.vscode
+/.venv
+/api_key.py
+/__pycache__
+/webcam_photo_log/
+/layer_photos/
+/print_runs/*
+!/print_runs/calibration_fit/
+!/print_runs/calibration_fit/**
+/models/*
+!/models/*.json
+/G-code/
