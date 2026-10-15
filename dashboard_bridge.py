@@ -23,7 +23,10 @@ HOST = os.environ.get("PRUSASAM_BRIDGE_HOST", "127.0.0.1")
 PORT = 8765
 ROOT = Path(__file__).resolve().parent
 HTML_PATH = ROOT / "prusa_dashboard.html"
-OCTOPRINT_URL = "http://10.105.77.241/"
+OCTOPRINT_URL = os.environ.get(
+    "PRUSASAM_OCTOPRINT_URL",
+    "http://cimpi-prusamk4s.local/",
+)
 OCTOPRINT_HOST = urlparse(OCTOPRINT_URL).hostname or "127.0.0.1"
 THERMAL_HOST = os.environ.get("PRUSASAM_THERMAL_HOST", OCTOPRINT_HOST)
 THERMAL_PORT = int(os.environ.get("PRUSASAM_THERMAL_PORT", "5001"))

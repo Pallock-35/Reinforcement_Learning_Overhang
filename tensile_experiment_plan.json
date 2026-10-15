@@ -1,0 +1,106 @@
+{
+  "status": "proposed_initial_screening",
+  "material": "ABS",
+  "specimens_per_plate": 2,
+  "baseline_source": "Prusa profile from the selected Tensile Type V G-code inspected 2026-10-15",
+  "baseline": {
+    "nozzle_temperature_c": 260,
+    "first_layer_nozzle_temperature_c": 260,
+    "bed_temperature_c": 110,
+    "first_layer_bed_temperature_c": 100,
+    "extrusion_speed_profile_scale": 1.0,
+    "normal_fan_percent": 10,
+    "first_layers_without_fan": 4,
+    "bridge_fan_percent": 20,
+    "extrusion_multiplier": 1.0,
+    "layer_height_mm": 0.2,
+    "nozzle_diameter_mm": 0.4,
+    "perimeters": 2,
+    "infill_percent": 15,
+    "infill_pattern": "grid"
+  },
+  "conditions": {
+    "baseline": {
+      "factor": "baseline",
+      "level": "Prusa ABS baseline",
+      "changes": {}
+    },
+    "speed60": {
+      "factor": "speed",
+      "level": "60 percent of baseline non-first-layer extrusion speed profile",
+      "changes": {
+        "extrusion_speed_profile_scale": 0.6
+      }
+    },
+    "speed80": {
+      "factor": "speed",
+      "level": "80 percent of baseline non-first-layer extrusion speed profile",
+      "changes": {
+        "extrusion_speed_profile_scale": 0.8
+      }
+    },
+    "fan0": {
+      "factor": "fan",
+      "level": "0 percent normal part cooling",
+      "changes": {
+        "normal_fan_percent": 0
+      }
+    },
+    "fan30": {
+      "factor": "fan",
+      "level": "30 percent normal part cooling",
+      "changes": {
+        "normal_fan_percent": 30
+      }
+    },
+    "nozzle250": {
+      "factor": "nozzle",
+      "level": "250 C after first layer",
+      "changes": {
+        "nozzle_temperature_c": 250
+      }
+    },
+    "nozzle255": {
+      "factor": "nozzle",
+      "level": "255 C after first layer",
+      "changes": {
+        "nozzle_temperature_c": 255
+      }
+    },
+    "flow095": {
+      "factor": "flow",
+      "level": "0.95 slicer extrusion multiplier; M221 stays 100 percent",
+      "changes": {
+        "extrusion_multiplier": 0.95
+      }
+    },
+    "flow105": {
+      "factor": "flow",
+      "level": "1.05 slicer extrusion multiplier; M221 stays 100 percent",
+      "changes": {
+        "extrusion_multiplier": 1.05
+      }
+    }
+  },
+  "interpretation": [
+    "For three specimens per condition: one two-specimen plate plus one one-specimen plate. Nine conditions require 18 jobs / 27 specimens.",
+    "Optional final baseline check: one additional specimen makes 19 jobs / 28 specimens, or repeat the full 2+1 baseline group for 20 jobs / 30 specimens.",
+    "Numerical levels are a proposed screening design, not a validated optimum or a guaranteed printability range.",
+    "Only use nozzle levels inside the actual filament manufacturer's stated range.",
+    "Preserve first-layer conditions. In the fan sweep change normal fan min/max only; keep bridge fan, disabled initial layers, and cooling slowdown rules unchanged.",
+    "For speed scale non-first-layer extrusion feature speed settings together; leave travel, first-layer speed, acceleration and volumetric limits unchanged. Verify sliced speeds differ in the actual specimen paths; cooling and volumetric limits may dominate.",
+    "For flow vary the slicer extrusion multiplier, not both multiplier and M221.",
+    "The collector records declared conditions and actual G-code; it does not apply or certify them.",
+    "Specimens from one plate share print history. Record sequential print order and plate position; the second object begins on a bed already heated by the first print."
+  ],
+  "references": [
+    "https://help.prusa3d.com/article/abs_2058",
+    "https://help.prusa3d.com/article/max-volumetric-speed_127176"
+  ],
+  "target_specimens_per_condition": 3,
+  "plates_per_condition": [
+    2,
+    1
+  ],
+  "print_sequence": "sequential_complete_objects"
+}
