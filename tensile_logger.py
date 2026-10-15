@@ -11,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import re
+import sqlite3
 import time
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -143,6 +144,38 @@ def resolve_condition(condition, factor, level, plan):
     return factor, level
 
 
+def reserve_specimen_ids(root, run, count, condition, replicate):
+    """Reserve short labels across conditions/jobs, including interrupted acquisitions."""
+    root = Path(root)
+    with sqlite3.connect(root / 'specimen_registry.sqlite3', timeout=30) as db:
+        db.execute('BEGIN IMMEDIATE')
+        db.execute('CREATE TABLE IF NOT EXISTS specimens (number INTEGER PRIMARY KEY, specimen_id TEXT UNIQUE, condition TEXT, replicate INTEGER, print_order INTEGER, run_folder TEXT)')
+        highest = db.execute('SELECT COALESCE(MAX(number), 0) FROM specimens').fetchone()[0]
+        # Also protect labels in copied runs if the registry has been lost or replaced.
+        for meta_path in root.glob('*/metadata.json'):
+            existing = json.loads(meta_path.read_text(encoding='utf-8'))
+            for label in existing.get('specimen_ids', []):
+                match = re.fullmatch(r'T(\d+)', label)
+                if match:
+                    highest = max(highest, int(match[1]))
+        labels = []
+        for order in range(1, count + 1):
+            number = highest + order
+            label = f'T{number:03d}'
+            db.execute('INSERT INTO specimens VALUES (?, ?, ?, ?, ?, ?)',
+                       (number, label, condition, replicate, order, run.name))
+            labels.append(label)
+        # Human-readable lookup: write atomically while the allocation lock is held.
+        lookup = root / 'specimen_index.csv'
+        temporary = root / '.specimen_index.csv.tmp'
+        with temporary.open('w', newline='', encoding='utf-8') as handle:
+            writer = csv.writer(handle)
+            writer.writerow(['specimen_id', 'condition', 'replicate', 'print_order', 'run_folder'])
+            writer.writerows(db.execute('SELECT specimen_id, condition, replicate, print_order, run_folder FROM specimens ORDER BY number'))
+        temporary.replace(lookup)
+    return labels
+
+
 COLUMNS = [
     'timestamp_utc', 'elapsed_s', 'state', 'completion_percent', 'filepos',
     'print_time_s', 'print_time_left_s', 'hotend_actual_c', 'hotend_target_c',
@@ -225,6 +258,7 @@ def main():
         print('Thermal feed is fresh. No run created and no printer commands sent.')
         return 0
     run, replicate = allocate_run(args.runs_root, args.condition, args.replicate)
+    specimen_ids = reserve_specimen_ids(args.runs_root, run, args.specimens_per_print, args.condition, replicate)
     (run / 'source.gcode').write_bytes(data)
     metadata = {
         'schema_version': 1, 'experiment_type': 'tensile', 'control_mode': 'observe_only',
@@ -235,7 +269,7 @@ def main():
         'specimens_per_print': args.specimens_per_print,
         'declared_print_sequence': plan.get('print_sequence', 'unknown'),
         'slicer_complete_objects': index.settings.get('complete_objects'),
-        'specimen_ids': [f'{run.name}_s{i:02d}' for i in range(1, args.specimens_per_print + 1)],
+        'specimen_ids': specimen_ids,
         'notes': args.notes, 'created_at_utc': now(), 'octoprint_file': selected,
         'gcode_sha256': hashlib.sha256(data).hexdigest(), 'slicer_settings': index.settings,
         'gcode_objects': index.objects, 'sampling_interval_s': args.interval,
@@ -264,6 +298,7 @@ def main():
         for order, specimen in enumerate(metadata['specimen_ids'], 1):
             writer.writerow([specimen, args.condition, replicate, '', order, '', args.material_batch, args.orientation])
     print(f'Collecting to {run.resolve()}\nRead-only: no printer settings will be changed.', flush=True)
+    print('Sharpie labels (print order): ' + ', '.join(f'{i}: {label}' for i, label in enumerate(specimen_ids, 1)), flush=True)
     print(f'G-code: {selected.get("name")} | material={index.settings.get("filament_type", "unknown")} | nozzle={index.settings.get("temperature", "unknown")} C', flush=True)
     if metadata['joined_mid_print']:
         print('Joined an active print: earlier data cannot be recovered.', flush=True)

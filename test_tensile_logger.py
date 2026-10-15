@@ -8,10 +8,28 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
-from tensile_logger import GcodeIndex, allocate_run, main, thermal_fields, resolve_condition
+from tensile_logger import GcodeIndex, allocate_run, main, thermal_fields, resolve_condition, reserve_specimen_ids
 
 
 class TensileTests(unittest.TestCase):
+    def test_short_labels_persist_across_conditions_and_registry_loss(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first, _ = allocate_run(root, 'baseline', None)
+            labels = reserve_specimen_ids(root, first, 2, 'baseline', 1)
+            self.assertEqual(labels, ['T001', 'T002'])
+            (first / 'metadata.json').write_text(json.dumps({'specimen_ids': labels}))
+            second, _ = allocate_run(root, 'fan30', None)
+            self.assertEqual(reserve_specimen_ids(root, second, 1, 'fan30', 1), ['T003'])
+            (second / 'metadata.json').write_text(json.dumps({'specimen_ids': ['T003']}))
+            with (root / 'specimen_index.csv').open() as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(rows[-1]['condition'], 'fan30')
+            self.assertEqual(rows[-1]['specimen_id'], 'T003')
+            (root / 'specimen_registry.sqlite3').unlink()
+            third, _ = allocate_run(root, 'baseline', None)
+            self.assertEqual(reserve_specimen_ids(root, third, 1, 'baseline', 2), ['T004'])
+
     def test_condition_labels_do_not_silently_default_to_baseline(self):
         plan = {'conditions': {'fan30': {'factor': 'fan', 'level': '30 percent'}}}
         self.assertEqual(resolve_condition('fan30', None, None, plan), ('fan', '30 percent'))
@@ -107,6 +125,7 @@ class TensileTests(unittest.TestCase):
                 meta = json.loads((run / 'metadata.json').read_text())
                 self.assertEqual(meta['end_reason'], 'print_left_active_state')
                 self.assertEqual(meta['slicer_settings']['filament_type'], 'ABS')
+                self.assertEqual(meta['specimen_ids'], ['T001', 'T002'])
                 self.assertEqual((run / 'source.gcode').read_bytes(), gcode)
                 with (run / 'stream.csv').open() as handle:
                     rows = list(csv.DictReader(handle))

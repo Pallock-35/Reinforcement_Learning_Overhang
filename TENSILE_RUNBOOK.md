@@ -13,6 +13,15 @@ of two, then a plate of one with the same settings. Each job has its own run fol
 The replicate number in a folder name identifies the print job, not the specimen.
 The specimen IDs remain unique across both jobs.
 
+Specimen labels are short enough to write with a Sharpie: `T001`, `T002`, `T003`, etc.
+The collector prints the labels in specimen print order. Write the label on the grip/end
+region, away from the gauge section. All conditions use the same increasing sequence;
+the condition and full metadata are looked up from the ID rather than encoded in it.
+`print_runs/tensile/specimen_index.csv` maps labels to condition, job and print order.
+Keep `specimen_registry.sqlite3` with the runs when backing up or moving the project;
+it prevents reuse of reserved IDs even for interrupted runs. A separate runs root has
+its own numbering sequence. Existing long IDs in older runs are left unchanged.
+
 Record plate position, sequential print order and the G-code object ID in
 `specimens.csv`. Order is prefilled 1, 2 for a two-specimen job; confirm the actual
 slicer order and map the labels to the physical specimens. Sequential specimens share
