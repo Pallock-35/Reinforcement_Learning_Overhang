@@ -144,34 +144,43 @@ def resolve_condition(condition, factor, level, plan):
     return factor, level
 
 
-def reserve_specimen_ids(root, run, count, condition, replicate):
+def reserve_specimen_ids(root, run, count, condition, replicate, requested_ids=None):
     """Reserve short labels across conditions/jobs, including interrupted acquisitions."""
     root = Path(root)
     with sqlite3.connect(root / 'specimen_registry.sqlite3', timeout=30) as db:
         db.execute('BEGIN IMMEDIATE')
         db.execute('CREATE TABLE IF NOT EXISTS specimens (number INTEGER PRIMARY KEY, specimen_id TEXT UNIQUE, condition TEXT, replicate INTEGER, print_order INTEGER, run_folder TEXT)')
+        db.execute('CREATE TABLE IF NOT EXISTS released_specimens (specimen_id TEXT PRIMARY KEY, previous_run TEXT, reason TEXT)')
         highest = db.execute('SELECT COALESCE(MAX(number), 0) FROM specimens').fetchone()[0]
         # Also protect labels in copied runs if the registry has been lost or replaced.
+        active_labels = set()
         for meta_path in root.glob('*/metadata.json'):
             existing = json.loads(meta_path.read_text(encoding='utf-8'))
             for label in existing.get('specimen_ids', []):
+                active_labels.add(label)
                 match = re.fullmatch(r'T(\d+)', label)
                 if match:
                     highest = max(highest, int(match[1]))
-        labels = []
-        for order in range(1, count + 1):
-            number = highest + order
-            label = f'T{number:03d}'
-            db.execute('INSERT INTO specimens VALUES (?, ?, ?, ?, ?, ?)',
-                       (number, label, condition, replicate, order, run.name))
-            labels.append(label)
+        labels = requested_ids or [f'T{highest + order:03d}' for order in range(1, count + 1)]
+        if len(labels) != count or len(set(labels)) != count:
+            raise ValueError('Provide one distinct specimen ID per specimen')
+        for order, label in enumerate(labels, 1):
+            if not re.fullmatch(r'T[0-9]{3,}', label) or int(label[1:]) < 1 or label != f'T{int(label[1:]):03d}':
+                raise ValueError('Specimen IDs must have the form T001, T002, etc.')
+            allocated = db.execute('SELECT 1 FROM specimens WHERE specimen_id = ?', (label,)).fetchone()
+            released = db.execute('SELECT 1 FROM released_specimens WHERE specimen_id = ?', (label,)).fetchone()
+            if label in active_labels or (allocated and not released):
+                raise ValueError(f'{label} is already assigned; explicitly exclude its failed attempt before reuse')
+            db.execute('INSERT OR REPLACE INTO specimens VALUES (?, ?, ?, ?, ?, ?)',
+                       (int(label[1:]), label, condition, replicate, order, run.name))
+            db.execute('DELETE FROM released_specimens WHERE specimen_id = ?', (label,))
         # Human-readable lookup: write atomically while the allocation lock is held.
         lookup = root / 'specimen_index.csv'
         temporary = root / '.specimen_index.csv.tmp'
         with temporary.open('w', newline='', encoding='utf-8') as handle:
             writer = csv.writer(handle)
             writer.writerow(['specimen_id', 'condition', 'replicate', 'print_order', 'run_folder'])
-            writer.writerows(db.execute('SELECT specimen_id, condition, replicate, print_order, run_folder FROM specimens ORDER BY number'))
+            writer.writerows(db.execute('SELECT specimen_id, condition, replicate, print_order, run_folder FROM specimens WHERE specimen_id NOT IN (SELECT specimen_id FROM released_specimens) ORDER BY number'))
         temporary.replace(lookup)
     return labels
 
@@ -212,6 +221,7 @@ def main():
     parser.add_argument('--condition', required=True, help='e.g. baseline or fan30')
     parser.add_argument('--replicate', type=int, help='Automatic next unused number if omitted')
     parser.add_argument('--specimens-per-print', type=int, default=2)
+    parser.add_argument('--specimen-ids', nargs='+', help='Explicit short labels; only unused or explicitly released IDs are accepted')
     parser.add_argument('--factor', choices=('baseline', 'fan', 'speed', 'nozzle', 'flow'))
     parser.add_argument('--plan', type=Path, default=Path(__file__).with_name('tensile_experiment_plan.json'))
     parser.add_argument('--level', help='Declared experimental level, e.g. 30 percent or 250 C; does not change settings')
@@ -258,7 +268,11 @@ def main():
         print('Thermal feed is fresh. No run created and no printer commands sent.')
         return 0
     run, replicate = allocate_run(args.runs_root, args.condition, args.replicate)
-    specimen_ids = reserve_specimen_ids(args.runs_root, run, args.specimens_per_print, args.condition, replicate)
+    try:
+        specimen_ids = reserve_specimen_ids(args.runs_root, run, args.specimens_per_print, args.condition, replicate, args.specimen_ids)
+    except Exception:
+        run.rmdir()
+        raise
     (run / 'source.gcode').write_bytes(data)
     metadata = {
         'schema_version': 1, 'experiment_type': 'tensile', 'control_mode': 'observe_only',

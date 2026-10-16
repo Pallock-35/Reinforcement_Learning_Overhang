@@ -19,7 +19,9 @@ region, away from the gauge section. All conditions use the same increasing sequ
 the condition and full metadata are looked up from the ID rather than encoded in it.
 `print_runs/tensile/specimen_index.csv` maps labels to condition, job and print order.
 Keep `specimen_registry.sqlite3` with the runs when backing up or moving the project;
-it prevents reuse of reserved IDs even for interrupted runs. A separate runs root has
+it prevents accidental reuse of reserved IDs even for interrupted runs. Explicitly
+excluded failed attempts may have their IDs released for a requested replacement.
+A separate runs root has
 its own numbering sequence. Existing long IDs in older runs are left unchanged.
 
 Record plate position, sequential print order and the G-code object ID in
@@ -40,7 +42,7 @@ when practical.
 | Factor | Baseline | Two alternative levels | Condition IDs |
 | --- | --- | --- | --- |
 | Extrusion speed profile | 100% | 60%, 80% | `speed60`, `speed80` |
-| Normal part cooling | 10% after first 4 layers | 0%, 30% | `fan0`, `fan30` |
+| Normal part cooling | 10% after first 4 layers | 5%, 30% | `fan5`, `fan30` |
 | Nozzle after first layer | 260 C | 250 C, 255 C | `nozzle250`, `nozzle255` |
 | Slicer extrusion multiplier | 1.00 | 0.95, 1.05 | `flow095`, `flow105` |
 
@@ -190,3 +192,23 @@ python3 -m unittest test_tensile_logger.py -v
 For sequential prints the layer-comment count continues across objects; do not interpret
 it as the layer number within a specimen. Use object ID and layer Z together. Thermal
 data is attributable to a specimen only after validating the camera view and object-ID mapping.
+
+## Replacement T004 at 5% fan
+
+The zero-normal-cooling attempt failed. T004 was removed from its specimen sheet and
+released for explicit reuse; shared files remain because they also contain the T005
+record. The old run is marked failed, with its condition corrected from baseline to
+fan0. The proposed lower cooling comparison is now fan5 instead of fan0.
+
+Slice one replacement specimen with normal cooling min/max both 5%, select that file
+in OctoPrint, then run before printing:
+
+```bash
+python3 tensile_logger.py --condition fan5 --specimens-per-print 1 --specimen-ids T004 --octoprint-url http://127.0.0.1:8080
+```
+
+Confirm the printed label is T004. This creates a fresh fan5 run, never overwrites the
+failed recording, and maps the active specimen ID to the replacement job. Explicit IDs
+are rejected if they still belong to an active specimen record. First-layer fan-off
+and bridge cooling exceptions remain as specified by the slicer; fan5 describes normal
+part cooling rather than every instant of the job.

@@ -1,6 +1,7 @@
 import csv
 import gzip
 import json
+import sqlite3
 from pathlib import Path
 import tempfile
 import threading
@@ -12,6 +13,22 @@ from tensile_logger import GcodeIndex, allocate_run, main, thermal_fields, resol
 
 
 class TensileTests(unittest.TestCase):
+    def test_explicit_reuse_requires_released_failed_specimen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            first, _ = allocate_run(root, 'fan0', None)
+            self.assertEqual(reserve_specimen_ids(root, first, 1, 'fan0', 1), ['T001'])
+            second, _ = allocate_run(root, 'fan5', None)
+            with self.assertRaises(ValueError):
+                reserve_specimen_ids(root, second, 1, 'fan5', 1, ['T001'])
+            with sqlite3.connect(root / 'specimen_registry.sqlite3') as db:
+                db.execute('INSERT INTO released_specimens VALUES (?, ?, ?)', ('T001', first.name, 'failed'))
+            self.assertEqual(reserve_specimen_ids(root, second, 1, 'fan5', 1, ['T001']), ['T001'])
+            with sqlite3.connect(root / 'specimen_registry.sqlite3') as db:
+                self.assertEqual(db.execute('SELECT condition FROM specimens WHERE specimen_id="T001"').fetchone()[0], 'fan5')
+            with self.assertRaises(ValueError):
+                reserve_specimen_ids(root, first, 1, 'fan0', 2, ['T001'])
+
     def test_short_labels_persist_across_conditions_and_registry_loss(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

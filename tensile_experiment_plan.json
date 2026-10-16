@@ -39,13 +39,6 @@
         "extrusion_speed_profile_scale": 0.8
       }
     },
-    "fan0": {
-      "factor": "fan",
-      "level": "0 percent normal part cooling",
-      "changes": {
-        "normal_fan_percent": 0
-      }
-    },
     "fan30": {
       "factor": "fan",
       "level": "30 percent normal part cooling",
@@ -80,6 +73,13 @@
       "changes": {
         "extrusion_multiplier": 1.05
       }
+    },
+    "fan5": {
+      "factor": "fan",
+      "level": "5 percent normal part cooling",
+      "changes": {
+        "normal_fan_percent": 5
+      }
     }
   },
   "interpretation": [
@@ -102,5 +102,15 @@
     2,
     1
   ],
-  "print_sequence": "sequential_complete_objects"
+  "print_sequence": "sequential_complete_objects",
+  "excluded_conditions": {
+    "fan0": {
+      "factor": "fan",
+      "level": "0 percent normal part cooling",
+      "changes": {
+        "normal_fan_percent": 0
+      },
+      "reason": "Print failed; replaced with 5 percent fan at user request"
+    }
+  }
 }
