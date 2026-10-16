@@ -212,3 +212,21 @@ failed recording, and maps the active specimen ID to the replacement job. Explic
 are rejected if they still belong to an active specimen record. First-layer fan-off
 and bridge cooling exceptions remain as specified by the slicer; fan5 describes normal
 part cooling rather than every instant of the job.
+
+## View and regenerate exploratory figures
+
+Original data is in `print_runs/tensile/<condition>_rNN/`; the central label lookup is
+`print_runs/tensile/specimen_index.csv`. To generate plots of all completed, nonfailed
+specimen recordings, run:
+
+```bash
+python3 analyze_tensile_runs.py
+```
+
+Figures and a method note are saved in `print_runs/tensile/analysis/`. The comparison
+aligns each specimen to its first recorded G-code object appearance and overlays ROI,
+measured nozzle/bed temperatures and commanded fan percentage. A separate thermal
+contact sheet shows the saved ROI at the midpoint of each specimen interval. Baseline
+object mapping is inferred from print order where no explicit object ID was entered.
+Review the supplied method note before comparing conditions. These plots do not estimate
+mechanical properties or establish that observed ROI differences were caused by fan speed.
