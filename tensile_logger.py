@@ -144,6 +144,68 @@ def resolve_condition(condition, factor, level, plan):
     return factor, level
 
 
+def gcode_condition(requested, settings, plan):
+    """Match the four experimental factors against archived slicer metadata."""
+    def numeric(value):
+        try:
+            result = float(value)
+            return result if math.isfinite(result) else None
+        except (ValueError, TypeError):
+            return None
+
+    baseline = plan.get('baseline', {})
+    actual = {
+        'fan_min_percent': numeric(settings.get('min_fan_speed')),
+        'fan_max_percent': numeric(settings.get('max_fan_speed')),
+        'nozzle_temperature_c': numeric(settings.get('temperature')),
+        'extrusion_multiplier': numeric(settings.get('extrusion_multiplier')),
+        'extrusion_speed_profile_scale': None,
+    }
+    ratios = []
+    reference = baseline.get('extrusion_speed_settings', {})
+    complete = bool(reference)
+    for key, original in reference.items():
+        before, after = numeric(original), numeric(settings.get(key))
+        if before is not None and after is not None and before > 0:
+            ratios.append(after / before)
+        elif settings.get(key) != original:
+            complete = False
+    if complete and ratios and all(math.isclose(r, ratios[0], rel_tol=.005) for r in ratios):
+        actual['extrusion_speed_profile_scale'] = ratios[0]
+
+    def differences(entry):
+        expected = dict(baseline)
+        expected.update(entry.get('changes', {}))
+        comparisons = {
+            'fan_min_percent': expected.get('normal_fan_percent'),
+            'fan_max_percent': expected.get('normal_fan_percent'),
+            'nozzle_temperature_c': expected.get('nozzle_temperature_c'),
+            'extrusion_multiplier': expected.get('extrusion_multiplier'),
+            'extrusion_speed_profile_scale': expected.get('extrusion_speed_profile_scale'),
+        }
+        return [key for key, value in comparisons.items()
+                if actual[key] is not None and value is not None
+                and not math.isclose(actual[key], value, rel_tol=.005, abs_tol=.001)]
+
+    fully_known = all(value is not None for value in actual.values())
+    matches = [name for name, entry in plan.get('conditions', {}).items()
+               if fully_known and not differences(entry)]
+    detected = matches[0] if len(matches) == 1 else None
+    if requested == 'auto':
+        if detected is None:
+            raise ValueError('G-code settings do not uniquely match the experiment plan. Specify --condition and review its settings; automatic labeling cannot guess.')
+        return detected, actual, 'gcode_plan_match'
+    entry = plan.get('conditions', {}).get(requested)
+    if entry is not None:
+        conflicts = differences(entry)
+        if conflicts:
+            # In the cooling series the actual fixed fan setpoints determine its label.
+            if detected and entry.get('factor') in ('baseline', 'fan') and plan['conditions'][detected].get('factor') == 'fan':
+                return detected, actual, 'gcode_plan_match'
+            raise ValueError(f'G-code conflicts with condition {requested}: {", ".join(conflicts)}. Detected condition: {detected or "unknown"}')
+    return requested, actual, 'gcode_plan_match' if detected == requested else 'declared_partially_checked'
+
+
 def reserve_specimen_ids(root, run, count, condition, replicate, requested_ids=None):
     """Reserve short labels across conditions/jobs, including interrupted acquisitions."""
     root = Path(root)
@@ -218,7 +280,7 @@ def thermal_fields(payload, stale_after):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--condition', required=True, help='e.g. baseline or fan30')
+    parser.add_argument('--condition', default='auto', help='Infer from G-code by default; or specify baseline, fan30, etc.')
     parser.add_argument('--replicate', type=int, help='Automatic next unused number if omitted')
     parser.add_argument('--specimens-per-print', type=int, default=2)
     parser.add_argument('--specimen-ids', nargs='+', help='Explicit short labels; only unused or explicitly released IDs are accepted')
@@ -237,10 +299,6 @@ def main():
     if not math.isfinite(args.interval) or args.interval <= 0 or args.specimens_per_print < 1 or (args.replicate is not None and args.replicate < 1):
         parser.error('Interval, replicate and specimen count must be positive')
     plan = json.loads(args.plan.read_text(encoding='utf-8')) if args.plan.exists() else {}
-    try:
-        args.factor, args.level = resolve_condition(args.condition, args.factor, args.level, plan)
-    except ValueError as error:
-        parser.error(str(error))
     key = load_key()
     base = args.octoprint_url.rstrip('/')
     job = get_json(base + '/api/job', key)
@@ -250,6 +308,15 @@ def main():
     path = quote(selected['path'], safe='/')
     data = get(base + '/downloads/files/local/' + path, key)
     index = GcodeIndex(data)
+    requested_condition = args.condition
+    try:
+        args.condition, observed_settings, condition_source = gcode_condition(requested_condition, index.settings, plan)
+        if args.condition != requested_condition and requested_condition != 'auto':
+            print(f'Correcting condition {requested_condition} -> {args.condition} from G-code settings.', flush=True)
+            args.factor = args.level = None
+        args.factor, args.level = resolve_condition(args.condition, args.factor, args.level, plan)
+    except ValueError as error:
+        parser.error(str(error))
     # Check thermal availability before assigning an experimental run.
     thermal = get_json(args.bridge_url.rstrip('/') + '/api/thermal')
     if not thermal_fields(thermal, max(3, args.interval * 3))['thermal_valid']:
@@ -277,6 +344,8 @@ def main():
     metadata = {
         'schema_version': 1, 'experiment_type': 'tensile', 'control_mode': 'observe_only',
         'condition': args.condition, 'replicate': replicate,
+        'requested_condition': requested_condition, 'condition_source': condition_source,
+        'observed_experiment_settings': observed_settings,
         'varied_factor': args.factor, 'declared_level': args.level,
         'experiment_plan': plan,
         'material_batch': args.material_batch, 'orientation': args.orientation,

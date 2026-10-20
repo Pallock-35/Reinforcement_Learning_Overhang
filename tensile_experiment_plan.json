@@ -17,7 +17,19 @@
     "nozzle_diameter_mm": 0.4,
     "perimeters": 2,
     "infill_percent": 15,
-    "infill_pattern": "grid"
+    "infill_pattern": "grid",
+    "extrusion_speed_settings": {
+      "perimeter_speed": "170",
+      "external_perimeter_speed": "170",
+      "small_perimeter_speed": "170",
+      "infill_speed": "200",
+      "solid_infill_speed": "200",
+      "top_solid_infill_speed": "100",
+      "gap_fill_speed": "120",
+      "bridge_speed": "50",
+      "support_material_speed": "120",
+      "support_material_interface_speed": "50%"
+    }
   },
   "conditions": {
     "baseline": {

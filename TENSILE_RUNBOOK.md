@@ -133,7 +133,7 @@ for 30% fan**, use:
 python3 tensile_logger.py --condition fan30 --factor fan --level '30 percent' --specimens-per-print 2 --octoprint-url http://127.0.0.1:8080
 ```
 
-These flags label the experiment; they do not apply or enforce its settings. Use
+The collector does not change printer settings. Use
 `--factor speed`, `--factor nozzle`, or `--factor flow` for the other series, with units in
 `--level`. For flow, specify whether the level is a slicer extrusion multiplier or a
 firmware M221 percentage. The former is represented in extrusion distances and slicer
@@ -148,7 +148,21 @@ python3 tensile_logger.py --condition flow095 --octoprint-url http://127.0.0.1:8
 ```
 
 The complete proposed plan is copied into each run's metadata. The selected G-code
-remains the evidence of what was sliced; a condition name does not verify its settings.
+remains the evidence of what was sliced. As of October 20, condition selection defaults
+to `auto`: the logger compares normal fan min/max, nozzle temperature, extrusion
+multiplier and the baseline extrusion-speed settings against the plan. For example:
+
+```bash
+python3 tensile_logger.py --specimens-per-print 2 --octoprint-url http://127.0.0.1:8080
+```
+
+If the G-code uniquely matches fan30, it records fan30 even when an old fan-series
+command requested fan5 or baseline. Other conflicting planned labels are rejected before
+assigning specimen IDs. Unknown/ambiguous combinations cannot be guessed automatically.
+Metadata saves the requested label, resolved label, source and observed factor settings.
+This matches slicer settings embedded in the G-code, not measured fan RPM. Raw fan commands
+remain in source.gcode and the per-sample command trace. First-layer/bridge exceptions
+and manual printer overrides are not represented by the normal fan label alone.
 
 ## Saved data
 

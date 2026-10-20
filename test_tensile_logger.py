@@ -9,10 +9,35 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
-from tensile_logger import GcodeIndex, allocate_run, main, thermal_fields, resolve_condition, reserve_specimen_ids
+from tensile_logger import GcodeIndex, allocate_run, main, thermal_fields, resolve_condition, reserve_specimen_ids, gcode_condition
 
 
 class TensileTests(unittest.TestCase):
+    def test_gcode_conditions_override_stale_fan_label_and_infer_other_factors(self):
+        plan = json.loads(Path(__file__).with_name('tensile_experiment_plan.json').read_text())
+        settings = dict(plan['baseline']['extrusion_speed_settings'])
+        settings.update(min_fan_speed='10', max_fan_speed='10', temperature='260', extrusion_multiplier='1')
+        self.assertEqual(gcode_condition('auto', settings, plan)[0], 'baseline')
+        fan = dict(settings, min_fan_speed='30', max_fan_speed='30')
+        self.assertEqual(gcode_condition('auto', fan, plan)[0], 'fan30')
+        self.assertEqual(gcode_condition('fan5', fan, plan)[0], 'fan30')
+        self.assertEqual(gcode_condition('baseline', fan, plan)[0], 'fan30')
+        self.assertEqual(gcode_condition('auto', dict(settings, temperature='250'), plan)[0], 'nozzle250')
+        self.assertEqual(gcode_condition('auto', dict(settings, extrusion_multiplier='0.95'), plan)[0], 'flow095')
+        slower = dict(settings)
+        for key, value in plan['baseline']['extrusion_speed_settings'].items():
+            try:
+                slower[key] = str(float(value) * .6)
+            except ValueError:
+                pass  # Relative feature speeds inherit their parent speed.
+        self.assertEqual(gcode_condition('auto', slower, plan)[0], 'speed60')
+        with self.assertRaises(ValueError):
+            gcode_condition('auto', dict(fan, temperature='250'), plan)
+        with self.assertRaises(ValueError):
+            gcode_condition('nozzle250', settings, plan)
+        with self.assertRaises(ValueError):
+            gcode_condition('auto', {'min_fan_speed': '30'}, plan)
+
     def test_explicit_reuse_requires_released_failed_specimen(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
